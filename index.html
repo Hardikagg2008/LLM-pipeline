@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Pipeline Explorer</title>
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Page shell ── */
+    body {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      background: #0d1117;
+      color: #cdd9e5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: #161b22;
+      border-bottom: 1px solid #21262d;
+      padding: 0 24px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .dots { display: flex; gap: 6px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #febc2e; }
+    .dot-g { background: #28c840; }
+
+    .topbar-title {
+      font-size: 0.8rem;
+      color: #8b949e;
+      letter-spacing: 0.04em;
+    }
+
+    .topbar-right {
+      font-size: 0.72rem;
+      color: #3fb950;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Main: single centered column, no sidebar ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 48px 24px 60px;
+      gap: 32px;
+    }
+
+    /* ── Big page title block (centred, top) ── */
+    .page-title {
+      text-align: center;
+      max-width: 640px;
+    }
+
+    .page-title h1 {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      color: #e6edf3;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
+    }
+
+    .page-title h1 em {
+      font-style: normal;
+      color: #58a6ff;
+    }
+
+    .page-title p {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0.95rem;
+      color: #8b949e;
+      line-height: 1.65;
+    }
+
+    .page-title p strong { color: #3fb950; font-weight: 600; }
+
+    /* ── Side-by-side row: input LEFT, output RIGHT ── */
+    .split-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    /* ── Shared panel style ── */
+    .panel {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      background: #0d1117;
+      border-bottom: 1px solid #21262d;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .panel-label {
+      font-size: 0.72rem;
+      color: #8b949e;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .panel-label .dot-sm {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #58a6ff;
+    }
+
+    .panel-label .dot-sm.green { background: #3fb950; }
+
+    /* ── Textarea (left panel) ── */
+    .input-panel textarea {
+      flex: 1;
+      background: #161b22;
+      border: none;
+      outline: none;
+      resize: none;
+      color: #e6edf3;
+      font-family: inherit;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      padding: 18px;
+      min-height: 200px;
+      caret-color: #58a6ff;
+    }
+
+    .input-panel textarea::placeholder { color: #3d444d; }
+
+    /* ── Char counter inside input panel footer ── */
+    .panel-footer {
+      background: #0d1117;
+      border-top: 1px solid #21262d;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-hint {
+      font-size: 0.7rem;
+      color: #3d444d;
+    }
+
+    .char-badge {
+      font-size: 0.7rem;
+      color: #8b949e;
+    }
+
+    .char-badge span { color: #58a6ff; }
+
+    /* ── Analyze button (stands alone between columns) ── */
+    .action-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    .btn-analyze {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #1f6feb;
+      color: #ffffff;
+      border: 1px solid #388bfd;
+      padding: 11px 28px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+    }
+
+    .btn-analyze:hover {
+      background: #388bfd;
+      box-shadow: 0 0 20px rgba(56, 139, 253, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn-analyze:active { transform: translateY(0); background: #1f6feb; }
+
+    .action-hint {
+      font-size: 0.72rem;
+      color: #3d444d;
+    }
+
+    /* ── Output panel (right side) ── */
+    .output-scroll {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 18px;
+      align-content: flex-start;
+      min-height: 200px;
+    }
+
+    .output-empty {
+      width: 100%;
+      text-align: center;
+      padding-top: 50px;
+      font-size: 0.78rem;
+      color: #3d444d;
+      line-height: 2;
+    }
+
+    /* ── Token chips ── */
+    .token-chip {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 5px;
+      padding: 7px 12px;
+      transition: border-color 0.15s, background 0.15s, transform 0.15s;
+      cursor: default;
+    }
+
+    .token-chip:hover {
+      border-color: #58a6ff;
+      background: #0d2340;
+      transform: translateY(-2px);
+    }
+
+    .token-text {
+      font-size: 0.85rem;
+      color: #79c0ff;
+      font-weight: 600;
+      white-space: pre;
+    }
+
+    .token-id {
+      font-size: 0.65rem;
+      color: #3fb950;
+    }
+
+    /* ── Stats bar: spans full width below the split row ── */
+    .stats-bar {
+      width: 100%;
+      max-width: 1000px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+
+    .stat-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-block .stat-label {
+      font-size: 0.65rem;
+      color: #484f58;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .stat-block .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #58a6ff;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 36px;
+      background: #21262d;
+    }
+
+    .stat-block.green .stat-value { color: #3fb950; }
+
+    /* ── Status bar ── */
+    .statusbar {
+      background: #1f6feb;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 0.7rem;
+      color: #ffffff;
+      letter-spacing: 0.04em;
+    }
+
+    .statusbar-right { opacity: 0.75; }
+  </style>
+</head>
+
+<body>
+
+  <!-- ── Fake terminal title bar ── -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="dots">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <span class="topbar-title">tokenizer.js — LLM Pipeline Explorer</span>
+    </div>
+    <span class="topbar-right">● ACTIVE</span>
+  </div>
+
+  <main>
+
+    <!-- ── Centred page title ── -->
+    <div class="page-title">
+      <h1>How does an <em>LLM</em> read your text?</h1>
+      <p>
+        Before a model can respond, it has to <strong>break your words apart</strong>.
+        Type anything below and watch it get split into the atomic pieces
+        that the model actually processes — called <strong>tokens</strong>.
+      </p>
+    </div>
+
+    <!-- ── INPUT (left) + OUTPUT (right) side by side ── -->
+    <div class="split-row">
+
+      <!-- Left: text input -->
+      <div class="panel input-panel">
+        <div class="panel-header">
+          <div class="panel-label">
+            <div class="dot-sm"></div>
+            your text
+          </div>
+        </div>
+        <textarea
+          id="prompt-input"
+          placeholder="Paste or type any sentence here…"
+          spellcheck="false"
+        >The quick brown fox jumps over the lazy dog.</textarea>
+        <div class="panel-footer">
+          <span class="footer-hint">hit Analyze ↓ to process</span>
+          <span class="char-badge"><span id="char-count">0</span> chars</span>
+        </div>
+      </div>
+
+      <!-- Right: token output -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-label">
+            <div class="dot-sm green"></div>
+            token stream
+          </div>
+          <span style="font-size:0.7rem;color:#484f58;" id="token-count-label">— tokens</span>
+        </div>
+        <div class="output-scroll" id="tokens-display">
+          <div class="output-empty">
+            &gt; waiting for input…<br/>
+            press Analyze to see tokens
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.split-row -->
+
+    <!-- ── Analyze button centred between sections ── -->
+    <div class="action-row">
+      <button class="btn-analyze" id="tokenize-btn">
+        ⚙ &nbsp;Analyze Text
+      </button>
+      <span class="action-hint">splits text into tokens and assigns each one a numeric ID</span>
+    </div>
+
+    <!-- ── Stats bar spanning full width ── -->
+    <div class="stats-bar" id="stats-bar" style="display:none;">
+      <div class="stat-block">
+        <div class="stat-label">Characters</div>
+        <div class="stat-value" id="stat-chars">0</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-block green">
+        <div class="stat-label">Tokens</div>
+        <div class="stat-value" id="stat-tokens">0</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-block">
+        <div class="stat-label">Avg chars / token</div>
+        <div class="stat-value" id="stat-avg">—</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── VS Code–style status bar ── -->
+  <div class="statusbar">
+    <span>⎇ main &nbsp;·&nbsp; Stage 1 of 5 &nbsp;·&nbsp; Tokenization</span>
+    <span class="statusbar-right">UTF-8</span>
+  </div>
+
+  <script>
+    // WHAT THIS DOES:
+    // Grab every element we need to read from or write to.
+    const promptInput     = document.getElementById('prompt-input');
+    const tokenizeBtn     = document.getElementById('tokenize-btn');
+    const tokensDisplay   = document.getElementById('tokens-display');
+    const charCountEl     = document.getElementById('char-count');
+    const tokenCountLabel = document.getElementById('token-count-label');
+    const statsBar        = document.getElementById('stats-bar');
+    const statChars       = document.getElementById('stat-chars');
+    const statTokens      = document.getElementById('stat-tokens');
+    const statAvg         = document.getElementById('stat-avg');
+
+    // WHAT THIS DOES:
+    // Keeps the live character counter in the input panel footer updated
+    // as the user types — no button click needed for this part.
+    promptInput.addEventListener('input', () => {
+      charCountEl.textContent = promptInput.value.length;
+    });
+
+    // Set initial char count on page load
+    charCountEl.textContent = promptInput.value.length;
+
+    // WHAT THIS DOES:
+    // Converts a token string into a fake-but-consistent numeric ID.
+    // Single-character tokens use their ASCII code.
+    // Longer tokens go through a simple hash to produce a stable number.
+    function getTokenId(token) {
+      if (token.length === 1) return 1000 + token.charCodeAt(0);
+      let hash = 0;
+      for (let i = 0; i < token.length; i++) {
+        hash = (hash * 31 + token.charCodeAt(i)) | 0;
+      }
+      return (Math.abs(hash) % 50000) + 1000;
+    }
+
+    // WHAT THIS DOES:
+    // Splits raw text into an array of token strings — words, whitespace
+    // chunks, and punctuation each become their own token.
+    function tokenizeText(text) {
+      if (!text) return [];
+      return text.match(/\r\n|\r|\n|\s+|[\p{L}\p{N}]+|[^\s\p{L}\p{N}]/gu) || [];
+    }
+
+    // WHAT THIS DOES:
+    // Runs when the user clicks "Analyze Text".
+    // It tokenizes the input, renders chips in the output panel,
+    // and updates the stats bar at the bottom.
+    function renderTokens() {
+      const text = promptInput.value;
+
+      // Empty input → reset everything
+      if (!text || text.trim() === '') {
+        tokensDisplay.innerHTML = '<div class="output-empty">&gt; nothing to analyze.<br/>type something above.</div>';
+        tokenCountLabel.textContent = '— tokens';
+        statsBar.style.display = 'none';
+        return;
+      }
+
+      const tokens = tokenizeText(text);
+
+      // Update the small header badge and stats bar
+      tokenCountLabel.textContent = tokens.length + ' tokens';
+      statChars.textContent   = text.length;
+      statTokens.textContent  = tokens.length;
+      statAvg.textContent     = (text.length / tokens.length).toFixed(1);
+      statsBar.style.display  = 'flex';
+
+      // Clear old chips
+      tokensDisplay.innerHTML = '';
+
+      // Render one chip per token
+      tokens.forEach(tok => {
+        // Make invisible characters human-readable
+        let display = tok;
+        if (/^\s+$/.test(tok)) display = '·space';
+        if (tok === '\n')       display = '↵';
+
+        const chip = document.createElement('div');
+        chip.className = 'token-chip';
+
+        const textSpan = document.createElement('span');
+        textSpan.className   = 'token-text';
+        textSpan.textContent = display;
+
+        const idSpan = document.createElement('span');
+        idSpan.className   = 'token-id';
+        idSpan.textContent = '#' + getTokenId(tok);
+
+        chip.appendChild(textSpan);
+        chip.appendChild(idSpan);
+        tokensDisplay.appendChild(chip);
+      });
+    }
+
+    // WHAT THIS DOES:
+    // Wires the button to the renderer, then auto-runs on load
+    // so the default sentence is already tokenized when the page opens.
+    tokenizeBtn.addEventListener('click', renderTokens);
+    renderTokens();
+  </script>
+
+</body>
+</html>
